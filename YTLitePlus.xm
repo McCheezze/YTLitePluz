@@ -110,12 +110,8 @@ BOOL isSelf() {
 }
 %end
 
-# pragma mark - Hide SponsorBlock Button
+// Hide SponsorBlock Button in navigation bar
 %hook YTRightNavigationButtons
-- (void)didMoveToWindow {
-    %orig;
-}
-
 - (void)layoutSubviews {
     %orig;
     if (IsEnabled(@"hideSponsorBlockButton_enabled")) { 
@@ -173,7 +169,6 @@ BOOL isSelf() {
 }
 %end
 %end
-
 
 // A/B flags
 %hook YTColdConfig 
@@ -578,16 +573,6 @@ BOOL isTabSelected = NO;
         [self setNeedsLayout];
         [self removeFromSuperview];
     }
-
-    // Live chat OLED dark mode - @bhackel
-    CGFloat alpha;
-    if ([[%c(YTLUserDefaults) standardUserDefaults] boolForKey:@"oledTheme"] // YTLite OLED Theme
-            && [self.accessibilityIdentifier isEqualToString:@"eml.live_chat_text_message"] // Live chat text message
-            && [self.backgroundColor getWhite:nil alpha:&alpha] // Check if color is grayscale and get alpha
-            && alpha != 0.0) // Ignore shorts live chat
-    {
-        self.backgroundColor = [UIColor blackColor];
-    }
 }
 %end
 
@@ -691,7 +676,7 @@ BOOL isTabSelected = NO;
     // Variable used to smooth out the X translation
     static CGFloat smoothedTranslationX = 0;
     // Constant for the filter constant to change responsiveness
-    static const CGFloat filterConstant = 0.1;
+    // static const CGFloat filterConstant = 0.1;
     // Constant for the deadzone radius that can be changed in the settings
     static CGFloat deadzoneRadius = (CGFloat)GetFloat(@"playerGesturesDeadzone");
     // Constant for the sensitivity factor that can be changed in the settings
@@ -758,10 +743,10 @@ BOOL isTabSelected = NO;
     };
 
     // Helper function to smooth out the X translation
-    CGFloat (^applyLowPassFilter)(CGFloat) = ^(CGFloat newTranslation) {
-        smoothedTranslationX = filterConstant * newTranslation + (1 - filterConstant) * smoothedTranslationX;
-        return smoothedTranslationX;
-    };
+    // CGFloat (^applyLowPassFilter)(CGFloat) = ^(CGFloat newTranslation) {
+    //     smoothedTranslationX = filterConstant * newTranslation + (1 - filterConstant) * smoothedTranslationX;
+    //     return smoothedTranslationX;
+    // };
 
 /***** Helper functions for running the selected gesture *****/
     // Helper function to run any setup for the selected gesture mode
@@ -872,6 +857,13 @@ BOOL isTabSelected = NO;
         }
         // Deactive the activity flag
         isValidHorizontalPan = NO;
+        // Cancel this gesture if it has not activated after 1 second
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (!isValidHorizontalPan && panGestureRecognizer.state != UIGestureRecognizerStateEnded) {
+                // Cancel the gesture by setting its state to UIGestureRecognizerStateCancelled
+                panGestureRecognizer.state = UIGestureRecognizerStateCancelled;
+            }
+        });
     }
 
     // Handle changed gesture state by activating the gesture once it has exited the deadzone,
@@ -925,7 +917,7 @@ BOOL isTabSelected = NO;
             // Adjust the X translation based on the value hit after exiting the deadzone
             adjustedTranslationX = translation.x - deadzoneStartingXTranslation;
             // Smooth the translation value
-            adjustedTranslationX = applyLowPassFilter(adjustedTranslationX);
+            // adjustedTranslationX = applyLowPassFilter(adjustedTranslationX);
             // Pass the adjusted translation to the selected gesture
             switch (gestureSection) {
                 case GestureSectionTop:
@@ -1235,6 +1227,8 @@ NSInteger pageStyle = 0;
     %init;
     // Access YouGroupSettings methods
     dlopen([[NSString stringWithFormat:@"%@/Frameworks/YouGroupSettings.dylib", [[NSBundle mainBundle] bundlePath]] UTF8String], RTLD_LAZY);
+    // Access YouTube Plus methods
+    dlopen([[NSString stringWithFormat:@"%@/Frameworks/YTLite.dylib",           [[NSBundle mainBundle] bundlePath]] UTF8String], RTLD_LAZY);
 
     if (IsEnabled(@"hideCastButton_enabled")) {
         %init(gHideCastButton);
@@ -1311,36 +1305,26 @@ NSInteger pageStyle = 0;
 
     // Change the default value of some options
     NSArray *allKeys = [[[NSUserDefaults standardUserDefaults] dictionaryRepresentation] allKeys];
-    if (![allKeys containsObject:@"RYD-ENABLED"]) { 
-       [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"RYD-ENABLED"]; 
-    }
-    if (![allKeys containsObject:@"YouPiPEnabled"]) { 
-       [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"YouPiPEnabled"]; 
-	}
-    if (![allKeys containsObject:@"newSettingsUI_enabled"]) { 
-       [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"newSettingsUI_enabled"]; 
-    }
-    if (![allKeys containsObject:@"fixCasting_enabled"]) { 
-       [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"fixCasting_enabled"]; 
-    }
-    // Default gestures as volume, brightness, seek
-    if (![allKeys containsObject:@"playerGestureTopSelection"]) { 
-       [[NSUserDefaults standardUserDefaults] setInteger:GestureModeVolume forKey:@"playerGestureTopSelection"]; 
-    }
-    if (![allKeys containsObject:@"playerGestureMiddleSelection"]) { 
-       [[NSUserDefaults standardUserDefaults] setInteger:GestureModeBrightness forKey:@"playerGestureMiddleSelection"]; 
-    }
-    if (![allKeys containsObject:@"playerGestureBottomSelection"]) { 
-       [[NSUserDefaults standardUserDefaults] setInteger:GestureModeSeek forKey:@"playerGestureBottomSelection"]; 
-    }
-    // Default configuration options for gestures
-    if (![allKeys containsObject:@"playerGesturesDeadzone"]) { 
-       [[NSUserDefaults standardUserDefaults] setFloat:20.0 forKey:@"playerGesturesDeadzone"]; 
-    }
-    if (![allKeys containsObject:@"playerGesturesSensitivity"]) { 
-       [[NSUserDefaults standardUserDefaults] setFloat:1.0 forKey:@"playerGesturesSensitivity"]; 
-    }
-    if (![allKeys containsObject:@"playerGesturesHapticFeedback_enabled"]) { 
-       [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"playerGesturesHapticFeedback_enabled"]; 
+    if (![allKeys containsObject:@"YTLPDidPerformFirstRunSetup"]) { 
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"YTLPDidPerformFirstRunSetup"];
+        // Set iSponsorBlock to default disabled
+        NSString *documentsDirectory = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+        NSString *settingsPath = [documentsDirectory stringByAppendingPathComponent:@"iSponsorBlock.plist"];
+        NSMutableDictionary *settings = [NSMutableDictionary dictionary];
+        [settings setObject:@(NO) forKey:@"enabled"];
+        [settings writeToFile:settingsPath atomically:YES];
+        // Set miscellaneous YTLitePlus features to enabled
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"RYD-ENABLED"]; 
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"YouPiPEnabled"]; 
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"newSettingsUI_enabled"]; 
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"fixCasting_enabled"]; 
+            // Default gestures as volume, brightness, seek
+        [[NSUserDefaults standardUserDefaults] setInteger:GestureModeVolume forKey:@"playerGestureTopSelection"]; 
+        [[NSUserDefaults standardUserDefaults] setInteger:GestureModeBrightness forKey:@"playerGestureMiddleSelection"]; 
+        [[NSUserDefaults standardUserDefaults] setInteger:GestureModeSeek forKey:@"playerGestureBottomSelection"]; 
+        // Default gestures options
+        [[NSUserDefaults standardUserDefaults] setFloat:20.0 forKey:@"playerGesturesDeadzone"]; 
+        [[NSUserDefaults standardUserDefaults] setFloat:1.0 forKey:@"playerGesturesSensitivity"]; 
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"playerGesturesHapticFeedback_enabled"]; 
     }
 }
